@@ -1,5 +1,8 @@
+//in general chatGPT make this code.
+//use perlin noise to get flow field and make praticle go throw it
+//when the praticle meet the words on the png slow down ang linger longer
 let particles = [];
-let particlesCount = 4000;
+let particlesCount =2000;
 let noiseScale = 800;
 let noiseStrength;
 let biasAngle;
@@ -8,7 +11,7 @@ let strokeWidth = 0.3;
 let img;
 
 function preload() {
-  img = loadImage("w2.png"); // 正确方式加载图片
+  img = loadImage("w2.png"); 
 }
 
 function setup() {
@@ -16,8 +19,8 @@ function setup() {
   pixelDensity(2);
   background("#000000");
 
-  noiseStrength = TWO_PI;      // ✅ 在 setup() 中使用
-  biasAngle = PI / 2;
+  noiseStrength = TWO_PI;     // Perlin noise angle range
+  biasAngle = PI / 2;         // Bias direction (downwards here)
 
   img.loadPixels();
 
@@ -27,9 +30,9 @@ function setup() {
 }
 
 function draw() {
-  // 尾迹效果：半透明覆盖
+  // Fading trail effect background layer
   noStroke();
-  fill("#415a77" + "10");  // hex alpha "10" ~ 6% 不透明
+  fill("#415a77" + "10"); // "#415a77" + alpha (hex "10" ≈ 6% opacity)
   rect(0, 0, width, height);
 
   for (let p of particles) {
@@ -38,56 +41,64 @@ function draw() {
 }
 
 function keyPressed() {
-  if (keyCode === BACKSPACE) background("#415a77");
-  if (key === ' ') noiseSeed(floor(random(10000)));
+  if (keyCode === BACKSPACE) background("#000000"); // Reset background
+  if (key === ' ') noiseSeed(floor(random(10000))); // Refresh noise field
 }
 
 // -------------------------------------------------------
 
 class Particle {
   constructor() {
+    // Spawn 
     this.pos = createVector(random(width), random(height));
     this.posOld = this.pos.copy();
-    this.baseSpeed = random(0.1, 2);
+    this.baseSpeed = random(0.05, 2);
   }
 
   update() {
-  let x = constrain(floor(this.pos.x), 0, width - 1);
-  let y = constrain(floor(this.pos.y), 0, height - 1);
-  let col = img.get(x, y);
-  let b = brightness(col);
+    // Get brightness of the underlying image at this position
+    let x = constrain(floor(this.pos.x), 0, width - 1);
+    let y = constrain(floor(this.pos.y), 0, height - 1);
+    let col = img.get(x, y);
+    let b = brightness(col);
 
-  let angle = noise(this.pos.x / noiseScale, this.pos.y / noiseScale) * noiseStrength;
-  angle = lerp(angle, biasAngle, 0.5); // 偏向左上
+    // Flow field angle from Perlin noise, mixed with bias direction
+    let angle = noise(this.pos.x / noiseScale, this.pos.y / noiseScale) * noiseStrength;
+    angle = lerp(angle, biasAngle, 0.5); // Blend 50% with bias direction
 
-  // ✨ 滞留 + 减速机制 ✨
-  let brightnessFactor = map(b, 0, 100, 0.1, 0.5);  // 原始速度因子
+    // Base brightness factor (darker = slower)
+    let brightnessFactor = map(b, 0, 100, 0.1, 0.5);
 
-  // linger: 黑色区域更强缩放 + 概率卡住
-  if (b < 15) {
-    if (random() < 0.5) {
-      brightnessFactor *= 0.05; // 极限减速
-    } else {
-      brightnessFactor *= 0.2; // 保持移动但缓慢
+    // Linger longer in dark areas (black parts of the image)
+    if (b < 15) {
+      if (random() < 0.5) {
+        brightnessFactor *= 0.03; // Almost stop
+      } else {
+        brightnessFactor *= 0.01; // Move extremely slowly
+      }
     }
+
+    let step = this.baseSpeed * brightnessFactor;
+
+    // Update position
+    this.pos.x += cos(angle) * step;
+    this.pos.y += sin(angle) * step;
+
+    // Boundary reset:
+    if (
+      this.pos.x < -10 || this.pos.x > width + 10 ||
+      this.pos.y < -10 || this.pos.y > height + 10
+    ) {
+      this.pos.set(random(width), random(height));
+      this.posOld.set(this.pos);
+    }
+
+    this.angle = angle;
+    this.step = step;
   }
-
-  let step = this.baseSpeed * brightnessFactor;
-
-  this.pos.x += cos(angle) * step;
-  this.pos.y += sin(angle) * step;
-
-  // 边界处理
-  if (this.pos.x < -10 || this.pos.x > width + 10 || this.pos.y < -10 || this.pos.y > height + 10) {
-    this.pos.set(random(width), random(height));
-    this.posOld.set(this.pos);
-  }
-
-  this.angle = angle;
-  this.step = step;
-}
 
   draw() {
+    // Particle trail drawing
     stroke("#ffffff");
     strokeWeight(0.3 * this.step);
     line(this.posOld.x, this.posOld.y, this.pos.x, this.pos.y);
@@ -99,4 +110,3 @@ class Particle {
     this.draw();
   }
 }
-
